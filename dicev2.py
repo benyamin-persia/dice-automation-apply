@@ -190,7 +190,11 @@ while True:
     current_url = f"{base_url}{url_params}&page={page}"
     print(f"\nNavigating to page {page}:")
     print(current_url)
-    driver.get(current_url)
+    try:
+        driver.get(current_url)
+    except Exception as e:
+        print(f"Error navigating to page {page}: {e}")
+        break
     time.sleep(3)  # Wait for the page to load.
     
     # Find all job cards using the CSS selector.
@@ -226,14 +230,33 @@ print(" 1. Auto Apply")
 print(" 2. Supervised")
 apply_mode = input("Enter 1 for Auto Apply or 2 for Supervised: ").strip()
 
+# -------------------- Step 5.5: Load Already Applied Jobs Record --------------------
+# Define the file path to store applied job links.
+applied_jobs_file = os.path.join(script_directory, "applied_jobs.txt")
+# Load previously applied job links into a set.
+applied_jobs = set()
+if os.path.exists(applied_jobs_file):
+    with open(applied_jobs_file, "r") as f:
+        for line in f:
+            applied_jobs.add(line.strip())
+
 # -------------------- Step 6: Visit Each Job Link, Evaluate, and Apply --------------------
 # Prepare a list to store dictionaries for each job with detailed information.
 detailed_job_data = []
 
 # Loop over each job detail link.
 for index, link in enumerate(job_detail_links, start=1):
+    # Check if we have already applied for this job.
+    if link in applied_jobs:
+        print(f"\nSkipping already applied job {index}: {link}")
+        continue
+
     print(f"\nVisiting job detail page {index}/{len(job_detail_links)}: {link}")
-    driver.get(link)
+    try:
+        driver.get(link)
+    except Exception as e:
+        print(f"Error navigating to job detail page {link}: {e}")
+        break
     time.sleep(2)  # Wait for the page to load.
     
     # Initialize empty fields.
@@ -252,7 +275,6 @@ for index, link in enumerate(job_detail_links, start=1):
         skills_container = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "div[data-cy='skillsList']")))
         # Find all <span> elements within the skills container.
         skill_spans = skills_container.find_elements(By.TAG_NAME, "span")
-        # Extract the text from each span and join them with commas.
         skills_list = [span.text.strip() for span in skill_spans if span.text.strip()]
         skills_text = ", ".join(skills_list)
     except Exception as e:
@@ -278,19 +300,21 @@ for index, link in enumerate(job_detail_links, start=1):
     if apply_job:
         try:
             # Click the "Apply now" button.
-            # This XPath assumes the button text is "Apply now" and that the button has the class "btn btn-primary".
             apply_now_button = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(text(),'Apply now')]")))
             apply_now_button.click()
             print("Clicked 'Apply now'.")
             time.sleep(2)  # Wait for the application page to load.
             
-            # On the next page, click the "Submit" button to finalize the application.
+            # Click the "Submit" button on the application page.
             submit_button = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(text(),'Submit')]")))
             submit_button.click()
             print("Clicked 'Submit' to finalize the application.")
-            time.sleep(2)  # Wait briefly for the submission to complete.
+            time.sleep(2)  # Wait for submission to complete.
         except Exception as e:
             print(f"Error during application process for {link}: {e}")
+    
+    # Record that we have processed (applied or skipped) this job.
+    applied_jobs.add(link)
     
     # Append the extracted job information and the application outcome.
     detailed_job_data.append({
@@ -299,6 +323,11 @@ for index, link in enumerate(job_detail_links, start=1):
         "Skills": skills_text,
         "Applied": "Yes" if apply_job else "No"
     })
+
+    # Update the applied jobs file after each processed job.
+    with open(applied_jobs_file, "w") as f:
+        for job in applied_jobs:
+            f.write(job + "\n")
 
 # -------------------- Step 7: Save the Detailed Information to an Excel File --------------------
 excel_filename = os.path.join(script_directory, "dice_job_links.xlsx")
