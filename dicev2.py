@@ -219,7 +219,14 @@ while True:
 
 print(f"\nTotal job detail links extracted (matching keywords): {len(job_detail_links)}")
 
-# -------------------- Step 5: Visit Each Job Link and Gather Additional Information --------------------
+# -------------------- Step 5: Ask Application Mode --------------------
+# Prompt the user to select application mode.
+print("\nSelect application mode:")
+print(" 1. Auto Apply")
+print(" 2. Supervised")
+apply_mode = input("Enter 1 for Auto Apply or 2 for Supervised: ").strip()
+
+# -------------------- Step 6: Visit Each Job Link, Evaluate, and Apply --------------------
 # Prepare a list to store dictionaries for each job with detailed information.
 detailed_job_data = []
 
@@ -227,7 +234,7 @@ detailed_job_data = []
 for index, link in enumerate(job_detail_links, start=1):
     print(f"\nVisiting job detail page {index}/{len(job_detail_links)}: {link}")
     driver.get(link)
-    time.sleep(2)  # Adjust delay if necessary.
+    time.sleep(2)  # Wait for the page to load.
     
     # Initialize empty fields.
     job_title_text = ""
@@ -251,16 +258,51 @@ for index, link in enumerate(job_detail_links, start=1):
     except Exception as e:
         print(f"Error retrieving skills for {link}: {e}")
     
-    # Append the extracted information as a dictionary.
+    # Determine whether to apply based on the chosen application mode.
+    apply_job = False
+    if apply_mode == "1":  # Auto Apply mode.
+        apply_job = True
+        print(f"Auto applying to: {job_title_text}")
+    elif apply_mode == "2":  # Supervised mode.
+        # Show the job title and ask the user if they want to apply.
+        user_choice = input(f"Do you want to apply for '{job_title_text}'? (Y/n): ").strip().lower() or "y"
+        if user_choice.startswith("y"):
+            apply_job = True
+        else:
+            apply_job = False
+            print("Skipping this job.")
+    else:
+        print("Invalid application mode selected; skipping application process for this job.")
+    
+    # If the decision is to apply, perform the click actions.
+    if apply_job:
+        try:
+            # Click the "Apply now" button.
+            # This XPath assumes the button text is "Apply now" and that the button has the class "btn btn-primary".
+            apply_now_button = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(text(),'Apply now')]")))
+            apply_now_button.click()
+            print("Clicked 'Apply now'.")
+            time.sleep(2)  # Wait for the application page to load.
+            
+            # On the next page, click the "Submit" button to finalize the application.
+            submit_button = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(text(),'Submit')]")))
+            submit_button.click()
+            print("Clicked 'Submit' to finalize the application.")
+            time.sleep(2)  # Wait briefly for the submission to complete.
+        except Exception as e:
+            print(f"Error during application process for {link}: {e}")
+    
+    # Append the extracted job information and the application outcome.
     detailed_job_data.append({
         "Job Detail Link": link,
         "Job Title": job_title_text,
-        "Skills": skills_text
+        "Skills": skills_text,
+        "Applied": "Yes" if apply_job else "No"
     })
 
-# -------------------- Step 6: Save the Detailed Information to an Excel File --------------------
+# -------------------- Step 7: Save the Detailed Information to an Excel File --------------------
 excel_filename = os.path.join(script_directory, "dice_job_links.xlsx")
-df = pd.DataFrame(detailed_job_data, columns=["Job Detail Link", "Job Title", "Skills"])
+df = pd.DataFrame(detailed_job_data, columns=["Job Detail Link", "Job Title", "Skills", "Applied"])
 df.to_excel(excel_filename, index=False)
 print(f"\nDetailed job information has been saved to {excel_filename}.")
 
